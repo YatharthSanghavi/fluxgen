@@ -344,4 +344,4 @@ FluxGen supports webhooks for real-time notifications:
 For API support and questions:
 
 - 🐛 Issues: [GitHub Issues](https://github.com/YatharthSanghavi/fluxgen/issues)
-- 📖 Documentation: [Full Documentation](./README.md)
+- 📖 Documentation: [Full Documentation](/README.md)
