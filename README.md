@@ -2,8 +2,8 @@
 
 A modern, feature-rich AI image generation application built with React, TypeScript, and powered by Together AI's FLUX.1 Schnell model. Create stunning images from text prompts with advanced customization options and real-time analytics.
 
+![FluxGen Screenshot](docs/images/fluxgen-screenshot.png)
 <div align="center">
-   ![FluxGen Screenshot](docs/images/fluxgen-screenshot.png)
    <p><em>Transform your ideas into stunning visuals with AI-powered image generation</em></p>
 </div>
 
