@@ -1,0 +1,793 @@
+{
+  "name": "togetherai_image_successfull",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/generate-image",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3008,
+        456
+      ],
+      "id": "faee8169-f595-4052-af7e-6abfa2377c3b",
+      "name": "Image Generation Webhook",
+      "webhookId": "8a3cd089-03cc-4967-8cee-59c15fe449e8"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced rate limiting with IP tracking and user quotas\nconst currentTime = Date.now();\nconst rateLimitWindow = 60000; // 1 minute\nconst hourlyWindow = 3600000; // 1 hour\nconst dailyWindow = 86400000; // 24 hours\n\nconst maxRequestsPerMinute = 5;\nconst maxRequestsPerHour = 50;\nconst maxRequestsPerDay = 200;\n\n// Get client IP with better fallback\nconst clientId = $input.first().json.headers['x-forwarded-for']?.split(',')[0]?.trim() || \n                $input.first().json.headers['x-real-ip'] || \n                $input.first().json.headers['cf-connecting-ip'] || \n                $input.first().json.headers['x-forwarded-proto'] || \n                'anonymous';\n\n// Initialize rate limit store\nif (!global.rateLimitStore) {\n  global.rateLimitStore = {};\n}\n\nif (!global.rateLimitStore[clientId]) {\n  global.rateLimitStore[clientId] = {\n    minute: [],\n    hour: [],\n    day: []\n  };\n}\n\n// Clean old entries\nconst store = global.rateLimitStore[clientId];\nstore.minute = store.minute.filter(timestamp => currentTime - timestamp < rateLimitWindow);\nstore.hour = store.hour.filter(timestamp => currentTime - timestamp < hourlyWindow);\nstore.day = store.day.filter(timestamp => currentTime - timestamp < dailyWindow);\n\n// Check rate limits\nconst minuteCount = store.minute.length;\nconst hourCount = store.hour.length;\nconst dayCount = store.day.length;\n\nif (minuteCount >= maxRequestsPerMinute) {\n  return {\n    rateLimitExceeded: true,\n    limitType: 'minute',\n    clientId,\n    requestCount: minuteCount,\n    maxRequests: maxRequestsPerMinute,\n    resetTime: Math.min(...store.minute) + rateLimitWindow\n  };\n}\n\nif (hourCount >= maxRequestsPerHour) {\n  return {\n    rateLimitExceeded: true,\n    limitType: 'hour',\n    clientId,\n    requestCount: hourCount,\n    maxRequests: maxRequestsPerHour,\n    resetTime: Math.min(...store.hour) + hourlyWindow\n  };\n}\n\nif (dayCount >= maxRequestsPerDay) {\n  return {\n    rateLimitExceeded: true,\n    limitType: 'day',\n    clientId,\n    requestCount: dayCount,\n    maxRequests: maxRequestsPerDay,\n    resetTime: Math.min(...store.day) + dailyWindow\n  };\n}\n\n// Add current request to all time windows\nstore.minute.push(currentTime);\nstore.hour.push(currentTime);\nstore.day.push(currentTime);\n\nreturn {\n  rateLimitExceeded: false,\n  clientId,\n  usage: {\n    minute: { current: minuteCount + 1, max: maxRequestsPerMinute },\n    hour: { current: hourCount + 1, max: maxRequestsPerHour },\n    day: { current: dayCount + 1, max: maxRequestsPerDay }\n  },\n  ...($input.first().json)\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2784,
+        456
+      ],
+      "id": "7463029f-2f45-4d57-a7c5-009e48c53385",
+      "name": "Enhanced Rate Limiter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "rate-limit-check",
+              "leftValue": "={{ $json.rateLimitExceeded }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        456
+      ],
+      "id": "d5eac30e-4302-46c6-b606-58833a4d4467",
+      "name": "Rate Limit Check"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "validation-1",
+              "leftValue": "={{ $json.query.message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "validation-2",
+              "leftValue": "={{ $json.query.message.length }}",
+              "rightValue": 1000,
+              "operator": {
+                "type": "number",
+                "operation": "smallerEqual"
+              }
+            },
+            {
+              "id": "validation-3",
+              "leftValue": "={{ $json.query.message.length }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "largerEqual"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2336,
+        360
+      ],
+      "id": "2292dddb-48e3-4dfb-bad2-d15573d3b161",
+      "name": "Enhanced Input Validation"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Advanced prompt processing with style presets and enhancements\nconst originalPrompt = $input.first().json.query.message;\nconst steps = Math.max(1, Math.min(50, parseInt($input.first().json.query.steps) || 10));\nconst numImages = Math.max(1, Math.min(4, parseInt($input.first().json.query.n) || 1));\nconst width = Math.max(256, Math.min(2048, parseInt($input.first().json.query.width) || 1024));\nconst height = Math.max(256, Math.min(2048, parseInt($input.first().json.query.height) || 1024));\nconst seed = $input.first().json.query.seed || null;\nconst style = $input.first().json.query.style || 'default';\nconst enhance = $input.first().json.query.enhance === 'true' || false;\nconst negative_prompt = $input.first().json.query.negative_prompt || '';\n\n// Enhanced content filtering with more comprehensive checks\nconst inappropriateTerms = [\n  'nude', 'naked', 'nsfw', 'explicit', 'sexual', 'porn', 'xxx', 'erotic',\n  'violence', 'gore', 'blood', 'death', 'kill', 'murder', 'suicide',\n  'hate', 'racist', 'discrimination', 'terrorism', 'weapon', 'drug',\n  'illegal', 'criminal', 'fraud', 'scam', 'piracy'\n];\n\nconst containsInappropriate = inappropriateTerms.some(term => \n  originalPrompt.toLowerCase().includes(term.toLowerCase()) ||\n  negative_prompt.toLowerCase().includes(term.toLowerCase())\n);\n\nif (containsInappropriate) {\n  return {\n    error: 'Content policy violation',\n    message: 'The prompt contains inappropriate content that cannot be processed.',\n    code: 'CONTENT_VIOLATION'\n  };\n}\n\n// Style presets for enhanced generation\nconst stylePresets = {\n  'photorealistic': ', photorealistic, high quality, detailed, 8k resolution, professional photography',\n  'artistic': ', artistic, creative, expressive, masterpiece, fine art style',\n  'cinematic': ', cinematic lighting, dramatic composition, film grain, movie still',\n  'fantasy': ', fantasy art, magical, ethereal, mystical, enchanted',\n  'anime': ', anime style, manga art, japanese animation, vibrant colors',\n  'vintage': ', vintage style, retro, nostalgic, aged, classic',\n  'minimalist': ', minimalist, clean, simple, modern, elegant',\n  'cyberpunk': ', cyberpunk, futuristic, neon, high-tech, dystopian',\n  'steampunk': ', steampunk, victorian, mechanical, brass, gears',\n  'watercolor': ', watercolor painting, soft colors, artistic brush strokes'\n};\n\n// Apply style enhancement\nlet enhancedPrompt = originalPrompt;\nif (style !== 'default' && stylePresets[style]) {\n  enhancedPrompt += stylePresets[style];\n}\n\n// General enhancement for better quality\nif (enhance) {\n  enhancedPrompt += ', high quality, detailed, masterpiece, best quality, ultra detailed';\n}\n\n// Build negative prompt\nlet finalNegativePrompt = negative_prompt;\nif (!finalNegativePrompt.includes('blurry') && !finalNegativePrompt.includes('low quality')) {\n  finalNegativePrompt += finalNegativePrompt ? ', ' : '';\n  finalNegativePrompt += 'blurry, low quality, distorted, deformed, ugly, bad anatomy, bad proportions';\n}\n\n// Prepare the API request body\nconst requestBody = {\n  model: 'black-forest-labs/FLUX.1-schnell-Free',\n  prompt: enhancedPrompt,\n  steps: steps,\n  n: numImages,\n  width: width,\n  height: height\n};\n\n// Add optional parameters\nif (seed !== null) {\n  requestBody.seed = parseInt(seed);\n}\n\nif (finalNegativePrompt) {\n  requestBody.negative_prompt = finalNegativePrompt;\n}\n\n// Add request metadata\nconst requestMetadata = {\n  originalPrompt,\n  enhancedPrompt,\n  style,\n  enhance,\n  steps,\n  numImages,\n  width,\n  height,\n  seed,\n  negative_prompt: finalNegativePrompt,\n  requestBody,\n  timestamp: new Date().toISOString(),\n  requestId: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,\n  usage: $input.first().json.usage\n};\n\nreturn requestMetadata;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2112,
+        264
+      ],
+      "id": "3827d1d6-d8d6-44f4-913c-031288bb824f",
+      "name": "Advanced Prompt Processor"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "content-check",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1888,
+        264
+      ],
+      "id": "939cd7e9-e8b5-46be-97a4-645291340ff9",
+      "name": "Content Filter Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log request for analytics and monitoring\nconst requestData = $input.first().json;\n\n// Create log entry\nconst logEntry = {\n  timestamp: new Date().toISOString(),\n  requestId: requestData.requestId,\n  clientId: requestData.usage?.clientId || 'unknown',\n  prompt: requestData.originalPrompt,\n  style: requestData.style,\n  parameters: {\n    steps: requestData.steps,\n    width: requestData.width,\n    height: requestData.height,\n    numImages: requestData.numImages,\n    seed: requestData.seed\n  },\n  usage: requestData.usage\n};\n\n// Store in global analytics (in production, use proper database)\nif (!global.analyticsStore) {\n  global.analyticsStore = [];\n}\n\n// Keep only last 1000 entries to prevent memory issues\nif (global.analyticsStore.length >= 1000) {\n  global.analyticsStore = global.analyticsStore.slice(-900);\n}\n\nglobal.analyticsStore.push(logEntry);\n\nreturn requestData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1664,
+        168
+      ],
+      "id": "b45f56df-3ef1-4cbc-8e6b-cca30769e16f",
+      "name": "Analytics Logger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.together.xyz/v1/images/generations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "N8N-FLUX-Enhanced/1.0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1440,
+        168
+      ],
+      "id": "1ff42258-806f-4491-8601-2e681db3102d",
+      "name": "Together AI FLUX API",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aTGOs7Hwlr1f6UcB",
+          "name": "togetherAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced response processing with metadata\nconst response = $input.first().json;\nconst requestMetadata = $input.first().json;\n\n// Check if the request was successful\nif (response.statusCode !== 200) {\n  const errorMessage = response.body?.error?.message || response.body?.message || 'Unknown error occurred';\n  return {\n    error: 'API Error',\n    message: errorMessage,\n    statusCode: response.statusCode,\n    code: 'API_ERROR',\n    requestId: requestMetadata.requestId,\n    retryable: response.statusCode >= 500 || response.statusCode === 429\n  };\n}\n\nconst responseData = response.body;\n\n// Check if we have image data\nif (!responseData.data || !responseData.data.length) {\n  return {\n    error: 'No images generated',\n    message: 'The API did not return any images',\n    code: 'NO_IMAGES',\n    requestId: requestMetadata.requestId\n  };\n}\n\n// Process images with enhanced metadata\nconst images = responseData.data.map((item, index) => {\n  const imageData = {\n    url: item.url,\n    index: index + 1,\n    b64_json: item.b64_json || null,\n    metadata: {\n      originalPrompt: requestMetadata.originalPrompt,\n      enhancedPrompt: requestMetadata.enhancedPrompt,\n      style: requestMetadata.style,\n      parameters: {\n        width: requestMetadata.width,\n        height: requestMetadata.height,\n        steps: requestMetadata.steps,\n        seed: requestMetadata.seed\n      },\n      timestamp: requestMetadata.timestamp,\n      requestId: requestMetadata.requestId\n    }\n  };\n  \n  // Add technical metadata if available\n  if (item.revised_prompt) {\n    imageData.metadata.revised_prompt = item.revised_prompt;\n  }\n  \n  return imageData;\n});\n\n// Calculate generation time\nconst generationTime = new Date().getTime() - new Date(requestMetadata.timestamp).getTime();\n\nreturn {\n  success: true,\n  images: images,\n  totalImages: images.length,\n  model: 'black-forest-labs/FLUX.1-schnell-Free',\n  generationTime: generationTime,\n  requestId: requestMetadata.requestId,\n  usage: requestMetadata.usage,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1216,
+        168
+      ],
+      "id": "14a14b7c-5673-40a9-a723-f9664a211b87",
+      "name": "Enhanced Response Processor"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "success-check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -992,
+        168
+      ],
+      "id": "a2715c52-55bd-4057-842a-b985e60ee9af",
+      "name": "Success Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced image processing with multiple format support\nconst responseData = $input.first().json;\nconst firstImage = responseData.images[0];\nconst format = 'png'; // Can be made configurable\n\n// If we have base64 data, use it directly\nif (firstImage.b64_json) {\n  const base64Data = firstImage.b64_json;\n  const buffer = Buffer.from(base64Data, 'base64');\n  \n  return {\n    binary: {\n      data: buffer,\n      mimeType: `image/${format}`,\n      fileName: `flux_${responseData.requestId}.${format}`\n    },\n    metadata: firstImage.metadata,\n    downloadRequired: false,\n    generationTime: responseData.generationTime,\n    requestId: responseData.requestId\n  };\n}\n\n// Otherwise, prepare for download\nreturn {\n  imageUrl: firstImage.url,\n  metadata: firstImage.metadata,\n  format: format,\n  fileName: `flux_${responseData.requestId}.${format}`,\n  downloadRequired: true,\n  allImages: responseData.images,\n  generationTime: responseData.generationTime,\n  requestId: responseData.requestId\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        72
+      ],
+      "id": "eb54260d-3730-4e94-949d-fb6fa6dc9743",
+      "name": "Enhanced Image Processor"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "download-check",
+              "leftValue": "={{ $json.downloadRequired }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        72
+      ],
+      "id": "56419083-a604-4cd9-a6fc-c75714922f50",
+      "name": "Download Check"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.imageUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        0
+      ],
+      "id": "e90cc0d1-78fa-4aed-9c73-ab896e15b868",
+      "name": "Enhanced Image Download"
+    },
+    {
+      "parameters": {
+        "enableResponseOutput": true,
+        "respondWith": "json",
+        "responseBody": "{\n  \"error\": \"Validation failed\",\n  \"category\": \"validation_error\",\n  \"message\": \"Please provide a valid message between 3 and 1000 characters\",\n  \"details\": {\n    \"field\": \"message\",\n    \"minLength\": 3,\n    \"maxLength\": 1000\n  },\n  \"timestamp\": \"{{ new Date().toISOString() }}\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -2112,
+        456
+      ],
+      "id": "03418ed2-25b5-45cd-a602-ee25c0f59547",
+      "name": "Enhanced Validation Error Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -1664,
+        360
+      ],
+      "id": "5b7ef8a6-af60-423c-91b5-f1e1416fb2a0",
+      "name": "Enhanced Content Error Response"
+    },
+    {
+      "parameters": {
+        "path": "/health",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3008,
+        872
+      ],
+      "id": "38310629-443f-4c8b-9ca5-9a98703f72f6",
+      "name": "Health Check Webhook",
+      "webhookId": "health-check-endpoint"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Health check endpoint with system status\nconst currentTime = new Date().toISOString();\nconst uptime = process.uptime();\n\n// Check rate limiter health\nconst rateLimiterStatus = global.rateLimitStore ? 'healthy' : 'not_initialized';\nconst activeClients = global.rateLimitStore ? Object.keys(global.rateLimitStore).length : 0;\n\n// Check analytics health\nconst analyticsStatus = global.analyticsStore ? 'healthy' : 'not_initialized';\nconst totalRequests = global.analyticsStore ? global.analyticsStore.length : 0;\n\n// Calculate recent activity (last hour)\nconst oneHourAgo = Date.now() - 3600000;\nconst recentRequests = global.analyticsStore ? \n  global.analyticsStore.filter(entry => new Date(entry.timestamp).getTime() > oneHourAgo).length : 0;\n\nconst healthStatus = {\n  status: 'healthy',\n  timestamp: currentTime,\n  uptime: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${Math.floor(uptime % 60)}s`,\n  version: '2.0.0',\n  services: {\n    rateLimiter: {\n      status: rateLimiterStatus,\n      activeClients: activeClients\n    },\n    analytics: {\n      status: analyticsStatus,\n      totalRequests: totalRequests,\n      recentRequests: recentRequests\n    },\n    imageGeneration: {\n      status: 'healthy',\n      endpoint: 'https://api.together.xyz/v1/images/generations',\n      model: 'black-forest-labs/FLUX.1-schnell-Free'\n    }\n  },\n  features: {\n    stylePresets: ['photorealistic', 'artistic', 'cinematic', 'fantasy', 'anime', 'vintage', 'minimalist', 'cyberpunk', 'steampunk', 'watercolor'],\n    supportedFormats: ['png'],\n    maxDimensions: '2048x2048',\n    maxImages: 4,\n    maxSteps: 50\n  }\n};\n\nreturn healthStatus;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2784,
+        872
+      ],
+      "id": "f22b37d3-b67f-44ab-bca8-3ab815432a56",
+      "name": "Health Status Generator"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -2560,
+        872
+      ],
+      "id": "7710715d-9698-4894-a39d-1e9a97b2b1cc",
+      "name": "Health Check Response"
+    },
+    {
+      "parameters": {
+        "path": "/analytics",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3008,
+        1096
+      ],
+      "id": "20ccc520-2a2b-4705-838e-6cbde7c07035",
+      "name": "Analytics Webhook",
+      "webhookId": "analytics-endpoint"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analytics endpoint with usage statistics\nconst analytics = global.analyticsStore || [];\nconst currentTime = Date.now();\n\n// Time windows\nconst oneHourAgo = currentTime - 3600000;\nconst oneDayAgo = currentTime - 86400000;\nconst oneWeekAgo = currentTime - 604800000;\n\n// Filter requests by time windows\nconst hourlyRequests = analytics.filter(entry => new Date(entry.timestamp).getTime() > oneHourAgo);\nconst dailyRequests = analytics.filter(entry => new Date(entry.timestamp).getTime() > oneDayAgo);\nconst weeklyRequests = analytics.filter(entry => new Date(entry.timestamp).getTime() > oneWeekAgo);\n\n// Calculate style usage\nconst styleUsage = {};\nanalytics.forEach(entry => {\n  const style = entry.style || 'default';\n  styleUsage[style] = (styleUsage[style] || 0) + 1;\n});\n\n// Calculate average parameters\nconst avgParams = {\n  steps: 0,\n  width: 0,\n  height: 0\n};\n\nif (analytics.length > 0) {\n  analytics.forEach(entry => {\n    avgParams.steps += entry.parameters.steps || 0;\n    avgParams.width += entry.parameters.width || 0;\n    avgParams.height += entry.parameters.height || 0;\n  });\n  \n  avgParams.steps = Math.round(avgParams.steps / analytics.length);\n  avgParams.width = Math.round(avgParams.width / analytics.length);\n  avgParams.height = Math.round(avgParams.height / analytics.length);\n}\n\n// Top clients by usage\nconst clientUsage = {};\nanalytics.forEach(entry => {\n  const clientId = entry.clientId || 'unknown';\n  clientUsage[clientId] = (clientUsage[clientId] || 0) + 1;\n});\n\nconst topClients = Object.entries(clientUsage)\n  .sort(([,a], [,b]) => b - a)\n  .slice(0, 10)\n  .map(([clientId, count]) => ({ clientId, requests: count }));\n\nconst analyticsResponse = {\n  timestamp: new Date().toISOString(),\n  overview: {\n    totalRequests: analytics.length,\n    uniqueClients: Object.keys(clientUsage).length,\n    avgRequestsPerClient: analytics.length > 0 ? Math.round(analytics.length / Object.keys(clientUsage).length) : 0\n  },\n  timeWindows: {\n    lastHour: hourlyRequests.length,\n    lastDay: dailyRequests.length,\n    lastWeek: weeklyRequests.length\n  },\n  styleUsage: styleUsage,\n  averageParameters: avgParams,\n  topClients: topClients,\n  recentRequests: analytics.slice(-10).map(entry => ({\n    timestamp: entry.timestamp,\n    requestId: entry.requestId,\n    style: entry.style,\n    parameters: entry.parameters\n  }))\n};\n\nreturn analyticsResponse;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2784,
+        1096
+      ],
+      "id": "a6b17696-b386-4e74-9052-5ee3244a00df",
+      "name": "Analytics Processor"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -2560,
+        1096
+      ],
+      "id": "fd8015fa-11da-4e69-aebb-227f05c22460",
+      "name": "Analytics Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        128,
+        64
+      ],
+      "id": "aa865073-f9f9-4861-9f21-e2fea48a4107",
+      "name": "Enhanced Success Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced error handling with retry logic\nconst errorData = $input.first().json;\n// Determine error category\nlet errorCategory = 'unknown';\nif (errorData.statusCode >= 500) {\n  errorCategory = 'server_error';\n} else if (errorData.statusCode === 429) {\n  errorCategory = 'rate_limit';\n} else if (errorData.statusCode >= 400) {\n  errorCategory = 'client_error';\n}\n  \nconst errorResponse = {\n  error: true,\n  category: errorCategory,\n  message: errorData.message || 'Unknown error',\n  code: errorData.code || 'UNKNOWN_ERROR',\n  statusCode: errorData.statusCode || 500,\n  requestId: errorData.requestId,\n  retryable: errorData.retryable || false,\n  timestamp: new Date().toISOString()\n};\n\n// Add retry information for retryable errors\nif (errorResponse.retryable) {\n  errorResponse.retryAfter = errorData.statusCode === 429 ? 60 : 5;\n  errorResponse.maxRetries = 3;\n}\n  \nreturn errorResponse;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        264
+      ],
+      "id": "40ebe3bb-28bd-43fe-905b-42dcec391deb",
+      "name": "Enhanced Error Handler"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -544,
+        264
+      ],
+      "id": "7eb4cfe7-1b95-46a0-8919-c8b03b6cfbe4",
+      "name": "Enhanced Error Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced rate limit response with detailed information\nconst rateLimitData = $input.first().json;\n\nconst response = {\n  error: \"Rate limit exceeded\",\n  category: \"rate_limit\",\n  limitType: rateLimitData.limitType,\n  message: `Too many requests per ${rateLimitData.limitType}. Current: ${rateLimitData.requestCount}/${rateLimitData.maxRequests}`,\n  usage: rateLimitData.usage,\n  resetTime: rateLimitData.resetTime,\n  retryAfter: Math.ceil((rateLimitData.resetTime - Date.now()) / 1000),\n  clientId: rateLimitData.clientId,\n  timestamp: new Date().toISOString()\n};\n\nreturn response;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2336,
+        648
+      ],
+      "id": "880b1dfc-bdfb-43e1-9dda-e0365d8a2409",
+      "name": "Rate Limit Formatter"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 429
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -2112,
+        648
+      ],
+      "id": "1abd49fe-4d14-4cbb-90d0-e084c1cd4d5d",
+      "name": "Enhanced Rate Limit Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Image Generation Webhook": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Rate Limiter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Rate Limiter": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Check": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enhanced Input Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Input Validation": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Validation Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Advanced Prompt Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advanced Prompt Processor": {
+      "main": [
+        [
+          {
+            "node": "Content Filter Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Filter Check": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Content Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analytics Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analytics Logger": {
+      "main": [
+        [
+          {
+            "node": "Together AI FLUX API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Together AI FLUX API": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Response Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Response Processor": {
+      "main": [
+        [
+          {
+            "node": "Success Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success Check": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enhanced Image Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Image Processor": {
+      "main": [
+        [
+          {
+            "node": "Download Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Check": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enhanced Image Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Image Download": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Formatter": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Rate Limit Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check Webhook": {
+      "main": [
+        [
+          {
+            "node": "Health Status Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Status Generator": {
+      "main": [
+        [
+          {
+            "node": "Health Check Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analytics Webhook": {
+      "main": [
+        [
+          {
+            "node": "Analytics Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analytics Processor": {
+      "main": [
+        [
+          {
+            "node": "Analytics Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e618bcf0-3797-46d7-b570-011653b6705e",
+  "meta": {
+    "instanceId": "7843ae7fac6b71e0d0c6deba34b4d6867bd520a983ac40c085379e88c194e44d"
+  },
+  "id": "gzTaFux48PpqHvpF",
+  "tags": []
+}
