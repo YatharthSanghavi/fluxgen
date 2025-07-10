@@ -25,7 +25,7 @@ We use GitHub to host code, to track issues and feature requests, as well as acc
 
 1. **Clone your fork**
    ```bash
-   git clone https://github.com/yourusername/fluxgen.git
+   git clone https://github.com/YatharthSanghavi/fluxgen.git
    cd fluxgen
    ```
 
@@ -130,7 +130,7 @@ Project maintainers are responsible for clarifying the standards of acceptable b
 
 ## Getting Help
 
-- Check the [documentation](./README.md)
+- Check the [documentation](/README.md)
 - Look through existing [issues](https://github.com/YatharthSanghavi/fluxgen/issues)
 - Join our [discussions](https://github.com/yourusername/fluxgen/discussions)
 
