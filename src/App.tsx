@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Sparkles, Trash2, Image as ImageIcon, Shield, Menu, X } from 'lucide-react';
+import { Sparkles, Trash2, Image as ImageIcon, Shield, Menu, X, Book } from 'lucide-react';
 import { GenerationForm } from './components/forms/GenerationForm';
 import { ImageGallery } from './components/gallery/ImageGallery';
 import { ErrorMessage } from './components/common/ErrorMessage';
 import { useApi } from './hooks/useApi';
 import { GenerationParams, GeneratedImage } from './types';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { Documentation } from './components/docs/Documentation';
 
 function MainPage() {
   const { generateImage, loading, error, clearError } = useApi();
@@ -186,6 +187,17 @@ function Navigation() {
               <Shield className="h-4 w-4" />
               Admin
             </Link>
+            <Link
+              to="/docs"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-200 ${
+                location.pathname === '/docs' 
+                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 border border-green-200 shadow-sm' 
+                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <Book className="h-4 w-4" />
+              Docs
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -224,6 +236,18 @@ function Navigation() {
               >
                 <Shield className="h-4 w-4" />
                 Admin
+              </Link>
+              <Link
+                to="/docs"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${
+                  location.pathname === '/docs' 
+                    ? 'bg-green-50 text-green-700' 
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <Book className="h-4 w-4" />
+                Docs
               </Link>
             </div>
           </div>
@@ -276,6 +300,7 @@ function App() {
                 <AdminDashboard />
               </div>
             } />
+            <Route path="/docs" element={<Documentation />} />
           </Routes>
         </main>
         <Footer />
