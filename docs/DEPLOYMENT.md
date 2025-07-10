@@ -652,4 +652,4 @@ tar -czf fluxgen-backup-$(date +%Y%m%d).tar.gz \
 
 ---
 
-For additional deployment support, please refer to our [GitHub Issues](https://github.com/yourusername/fluxgen/issues) or contact support@fluxgen.dev.
+For additional deployment support, please refer to our [GitHub Issues](https://github.com/yourusername/fluxgen/issues)
